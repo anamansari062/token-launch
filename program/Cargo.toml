@@ -1,0 +1,23 @@
+[package]
+name = "token-launch"
+version = "0.1.0"
+edition = "2021"
+
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "token_launch"
+
+[dependencies]
+borsh = { workspace = true }
+solana-program = { workspace = true }
+spl-token = { workspace = true }
+thiserror = { workspace = true }
+getrandom = { version = "0.1.14", features = ["dummy"] }
+
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[features]
+no-entrypoint = []
