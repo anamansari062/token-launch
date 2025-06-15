@@ -43,17 +43,15 @@ pub fn launch_asset(
             )?;
         }
         AssetType::SplToken2022 => {
-            // launch_spl_token_2022(
-            //     // program_id,
-            //     payer,
-            //     mint_account,
-            //     token_account,
-            //     // metadata_account,
-            //     &rent,
-            //     system_program,
-            //     token_program,
-            //     &config,
-            // )?;
+            launch_spl_token_2022(
+                payer,
+                mint_account,
+                token_account,
+                system_program,
+                token_program,
+                rent,
+                &config,
+            )?;
         }
         AssetType::StandardNft => {
             // launch_standard_nft(
@@ -124,28 +122,39 @@ fn launch_spl_token_legacy<'a>(
 }
 
 /// Launch SPL Token 2022
-fn _launch_spl_token_2022<'a>(
-    _payer: &AccountInfo<'a>,
-    _mint_account: &AccountInfo<'a>,
-    _token_account: &AccountInfo<'a>,
-    _rent: &Rent,
-    _system_program: &AccountInfo<'a>,
-    _token_program: &AccountInfo<'a>,
+fn launch_spl_token_2022<'a>(
+    payer: &AccountInfo<'a>,
+    mint_account: &AccountInfo<'a>,
+    token_account: &AccountInfo<'a>,
+    system_program: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    rent: &Rent,
     config: &LaunchConfig,
 ) -> ProgramResult {
     msg!("Launching SPL Token 2022: {}", config.name);
     
-    // For now, use same logic as legacy token
-    // In a full implementation, you'd use spl-token-2022 specific features
-    // launch_spl_token_legacy(
-    //     payer,
-    //     mint_account,
-    //     token_account,
-    //     rent,
-    //     system_program,
-    //     token_program,
-    //     config,
-    // )
+    // Create and initialize mint account
+    initialize_mint::process(
+        payer,
+        payer,
+        mint_account,
+        system_program,
+        token_program,
+        rent
+    )?;
+
+    // Create and mint to token account if supply > 0
+    if config.total_supply > 0 {
+        create_and_mint_to_token_account(
+            payer,
+            mint_account,
+            token_account,
+            rent,
+            system_program,
+            token_program,
+            config.total_supply,
+        )?;
+    }
     Ok(())
 }
 
