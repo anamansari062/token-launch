@@ -23,7 +23,8 @@ export async function sendLaunchTransaction(
     const sig = await sendAndConfirmTransaction(
         connection,
         tx,
-        signers
+      signers,
+      { commitment: "confirmed"},
     );
     assert.ok(sig);
       console.log("Transaction signature:", sig);

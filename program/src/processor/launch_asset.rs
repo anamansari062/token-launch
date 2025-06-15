@@ -2,7 +2,7 @@ use solana_program::{
     account_info::{ next_account_info, AccountInfo }, entrypoint::ProgramResult,  msg, program::invoke_signed, program_error::ProgramError, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
 };
 use crate::{
-    constants::LAUNCHED_ASSET_SEED, cpi::{initialize_mint, initialize_token_account, mint_to}, state::{ Asset, AssetType, LaunchConfig }, util::validate_launch_config
+    constants::{LAUNCHED_ASSET_SEED, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID}, cpi::{initialize_mint, initialize_token_account, mint_to, set_authority}, state::{ Asset, AssetType, LaunchConfig }, util::validate_launch_config
 };
 
 use borsh::BorshSerialize;
@@ -22,7 +22,6 @@ pub fn launch_asset(
     let metadata_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?;
-    let _associated_token_account = next_account_info(accounts_iter)?;
     let rent= &Rent::get()?;
 
     // Verify signer
@@ -54,16 +53,15 @@ pub fn launch_asset(
             )?;
         }
         AssetType::StandardNft => {
-            // launch_standard_nft(
-            //     // program_id,
-            //     payer,
-            //     mint_account,
-            //     // metadata_account,
-            //     &rent,
-            //     system_program,
-            //     token_program,
-            //     &config,
-            // )?;
+            launch_standard_nft(
+                payer,
+                mint_account,
+                token_account,
+                system_program,
+                token_program,
+                rent,
+                &config,
+            )?;
         }
     }
 
@@ -95,6 +93,10 @@ fn launch_spl_token_legacy<'a>(
 )  -> ProgramResult {
     msg!("Launching SPL Token (Legacy): {}", config.name);
 
+    if !token_program.key.eq(&TOKEN_PROGRAM_ID) {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
     // Create and initialize mint account
     initialize_mint::process(
         payer,
@@ -102,7 +104,8 @@ fn launch_spl_token_legacy<'a>(
         mint_account,
         system_program,
         token_program,
-        rent
+        rent,
+        config.decimals
     )?;
 
     // Create and mint to token account if supply > 0
@@ -132,6 +135,10 @@ fn launch_spl_token_2022<'a>(
     config: &LaunchConfig,
 ) -> ProgramResult {
     msg!("Launching SPL Token 2022: {}", config.name);
+
+    if !token_program.key.eq(&TOKEN_2022_PROGRAM_ID) {
+        return Err(ProgramError::IncorrectProgramId);
+    }
     
     // Create and initialize mint account
     initialize_mint::process(
@@ -140,7 +147,8 @@ fn launch_spl_token_2022<'a>(
         mint_account,
         system_program,
         token_program,
-        rent
+        rent,
+        config.decimals
     )?;
 
     // Create and mint to token account if supply > 0
@@ -159,45 +167,50 @@ fn launch_spl_token_2022<'a>(
 }
 
 /// Launch Standard NFT
-fn _launch_standard_nft<'a>(
-    _payer: &AccountInfo<'a>,
-    _mint_account: &AccountInfo<'a>,
-    _rent: &Rent,
-    _system_program: &AccountInfo<'a>,
-    _token_program: &AccountInfo<'a>,
+fn launch_standard_nft<'a>(
+    payer: &AccountInfo<'a>,
+    mint_account: &AccountInfo<'a>,
+    token_account: &AccountInfo<'a>,
+    system_program: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    rent: &Rent,
     config: &LaunchConfig,
 ) -> ProgramResult {
-    msg!("Launching Standard NFT: {}", config.name);
+    msg!("Launching Standard NFT: {} on {} program", config.name, token_program.key);
 
-    // Create mint account for NFT (0 decimals, supply of 1)
-    // let mint_space = Mint::LEN;
-    // let mint_lamports = rent.minimum_balance(mint_space);
+    // Create and initialize mint account
+    initialize_mint::process(
+        payer,
+        payer,
+        mint_account,
+        system_program,
+        token_program,
+        rent,
+        0 , // NFTs have 0 decimals
+    )?;
 
-    // invoke(
-    //     &system_instruction::create_account(
-    //         payer.key,
-    //         mint_account.key,
-    //         mint_lamports,
-    //         mint_space as u64,
-    //         token_program.key,
-    //     ),
-    //     &[payer.clone(), mint_account.clone(), system_program.clone()],
-    // )?;
+    msg!("NFT Mint account initialized: {}", mint_account.key);
 
-    // Initialize mint with 0 decimals for NFT
-    // invoke(
-    //     &token_instruction::initialize_mint(
-    //         token_program.key,
-    //         mint_account.key,
-    //         payer.key,
-    //         Some(payer.key),
-    //         0, // NFTs have 0 decimals
-    //     )?,
-    //     &[mint_account.clone()],
-    // )?;
+    // Create and mint nft to account
+    create_and_mint_to_token_account(
+        payer,
+        mint_account,
+        token_account,
+        rent,
+        system_program,
+        token_program,
+        1, // NFTs have a supply of 1
+    )?;
 
-    // Note: In a full implementation, I would create Metaplex metadata here
-    // This requires additional accounts and the Metaplex Token Metadata program
+    msg!("Minting NFT to token account: {}", token_account.key);
+
+    set_authority::process(
+        mint_account,
+        payer,
+        token_program
+    )?;
+
+    msg!("Removed Mint Authority");
 
     Ok(())
 }

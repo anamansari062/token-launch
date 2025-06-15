@@ -19,6 +19,7 @@ pub fn process<'a>(
     system_program: &AccountInfo<'a>,
     token_program: &AccountInfo<'a>,
     rent: &Rent,
+    decimals: u8,
 ) -> ProgramResult {
     
     // Serialize instruction data
@@ -39,7 +40,7 @@ pub fn process<'a>(
 
     let data = InitializeMintInstructionData {
         discriminator: 20,
-        decimals: 6,
+        decimals: decimals,
         mint_authority: *mint_authority.key,
         freeze_authority_option: 1,
         freeze_authority: *freeze_authority.key,
