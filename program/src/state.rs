@@ -15,18 +15,7 @@ pub enum LaunchpadInstruction {
     /// 6. [] Associated token program (if applicable)
     LaunchAsset {
         config: LaunchConfig,
-    },
-
-    // /// Update metadata (if mutable)
-    // /// Accounts:
-    // /// 0. [signer] Update authority
-    // /// 1. [writable] Metadata account
-    // /// 2. [] Metadata program
-    // UpdateMetadata {
-    //     name: String,
-    //     symbol: String,
-    //     uri: String,
-    // },
+    }
 }
 
 // Asset types that can be launched

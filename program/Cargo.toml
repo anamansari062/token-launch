@@ -8,15 +8,17 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 name = "token_launch"
 
-[dependencies]
-borsh = { workspace = true }
-solana-program = { workspace = true }
-thiserror = { workspace = true }
-getrandom = { version = "0.1.14", features = ["dummy"] }
+[build]
+target-dir = "target-program"
 
+[dependencies]
+solana-program = { workspace = true }
+borsh = { workspace = true }
+thiserror = { workspace = true } 
+getrandom = { workspace = true } 
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true } 
 
 [features]
 no-entrypoint = []

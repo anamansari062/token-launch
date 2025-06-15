@@ -65,7 +65,7 @@ pub fn launch_asset(
         }
     }
 
-    // Create program data account to track the launched asset
+    // Create pda account to store metadata of the launched asset
     create_launched_asset_account(
         program_id,
         payer,
@@ -94,7 +94,7 @@ fn launch_spl_token_legacy<'a>(
     msg!("Launching SPL Token (Legacy): {}", config.name);
 
     if !token_program.key.eq(&TOKEN_PROGRAM_ID) {
-        return Err(ProgramError::IncorrectProgramId);
+        return Err(ProgramError::Custom(1));
     }
 
     // Create and initialize mint account
@@ -137,7 +137,7 @@ fn launch_spl_token_2022<'a>(
     msg!("Launching SPL Token 2022: {}", config.name);
 
     if !token_program.key.eq(&TOKEN_2022_PROGRAM_ID) {
-        return Err(ProgramError::IncorrectProgramId);
+        return Err(ProgramError::Custom(1));
     }
     
     // Create and initialize mint account

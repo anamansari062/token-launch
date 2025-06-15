@@ -8,19 +8,20 @@ description = "CLI tool for the Solana Launchpad program"
 name = "cli"
 path = "src/main.rs"
 
+[build]
+target-dir = "target-cli"
+
 [dependencies]
 # Local dependencies
 token-launch = { path = "../program" }
 
-# Solana dependencies
+clap = { version = "4.0", features = ["derive"] }
 solana-program = { workspace = true }
-spl-token = { workspace = true }
-
-# Serialization and CLI
+solana-program-test = "1.18.11"
+solana-sdk = "1.18.11"
+solana-client = "1.18.11"
 borsh = { workspace = true }
-clap = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
-
-# Error handling
-thiserror = { workspace = true }
+getrandom = { workspace = true }

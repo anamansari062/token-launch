@@ -1,2 +1,5 @@
 /target
 /node_modules
+/program/target-program
+/bin/target-cli
+

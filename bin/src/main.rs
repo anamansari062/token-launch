@@ -1,12 +1,12 @@
 use clap::{Arg, Command};
-use solana_program::pubkey::Pubkey;
-use std::str::FromStr;
+use cli::{handle_get_pda, handle_launch, handle_validate};
 
-// Import from our library
-use token_launch::{AssetType, LaunchConfig};
-use token_launch::util::{validate_launch_config, get_launched_asset_pda};
+mod instruction;
+mod helper;
+mod cli;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = Command::new("Token Launch CLI")
         .version("1.0")
         .about("CLI tool for launching tokens and NFTs on Solana")
@@ -66,9 +66,89 @@ fn main() {
                         .required(true),
                 ),
         )
+        .subcommand(
+            Command::new("launch")
+                .about("Mint a new SPL token (legacy), token 22 or NFT")
+                .arg(
+                    Arg::new("type")
+                        .short('t')
+                        .long("type")
+                        .value_name("ASSET_TYPE")
+                        .help("Asset type: spl-legacy, spl-2022, or nft")
+                        .required(true),
+                )
+                .arg(
+                    Arg::new("name")
+                        .short('n')
+                        .long("name")
+                        .value_name("NAME")
+                        .help("Token or NFT name")
+                        .default_value("MyCliToken")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("symbol")
+                        .short('s')
+                        .long("symbol")
+                        .value_name("SYMBOL")
+                        .help("Token or NFT symbol")
+                        .default_value("CLI")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("decimals")
+                        .short('d')
+                        .long("decimals")
+                        .value_name("DECIMALS")
+                        .help("Number of decimals (0 for NFT)")
+                        .default_value("6")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("supply")
+                        .short('S')
+                        .long("supply")
+                        .value_name("SUPPLY")
+                        .help("Total supply (1 for NFT)")
+                        .default_value("1000000")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("uri")
+                        .short('u')
+                        .long("uri")
+                        .value_name("URI")
+                        .help("Metadata URI")
+                        .required(false)
+                        .default_value("https://example.com/metadata.json"),
+                )
+                .arg(
+                    Arg::new("program-id")
+                        .short('p')
+                        .long("program-id")
+                        .value_name("PROGRAM_ID")
+                        .help("Launchpad program ID")
+                        .default_value("4n6ByGTtLj4fTgLApV2aigC3XzWZhCmYkNbcfVheGzd8")
+                        .required(false),
+                )
+                .arg(
+                    Arg::new("rpc-url")
+                        .long("rpc-url")
+                        .value_name("RPC_URL")
+                        .help("Solana RPC endpoint")
+                        .default_value("https://api.devnet.solana.com")
+                        .required(false),
+                ),
+        )
         .get_matches();
 
     match matches.subcommand() {
+        Some(("launch", sub_matches)) => {
+            if let Err(e) = handle_launch(sub_matches).await {
+                eprintln!("Error launching asset: {}", e);
+                std::process::exit(1);    
+            }
+        }
         Some(("get-pda", sub_matches)) => {
             if let Err(e) = handle_get_pda(sub_matches) {
                 eprintln!("Error getting PDA: {}", e);
@@ -88,60 +168,10 @@ fn main() {
     }
 }
 
-fn handle_validate(matches: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let name = matches.get_one::<String>("name").unwrap();
-    let symbol = matches.get_one::<String>("symbol").unwrap();
-    let decimals: u8 = matches.get_one::<String>("decimals").unwrap().parse()?;
-    let uri = matches.get_one::<String>("uri").unwrap();
-
-    let config = LaunchConfig {
-        asset_type: AssetType::SplTokenLegacy,
-        name: name.clone(),
-        symbol: symbol.clone(),
-        decimals,
-        total_supply: 1_000_000,
-        metadata_uri: uri.clone(),
-        creator: Pubkey::new_unique(),
-        is_mutable: true,
-    };
-
-    match validate_launch_config(&config) {
-        Ok(()) => {
-            println!("✅ Configuration is valid!");
-            println!("Name: {}", name);
-            println!("Symbol: {}", symbol);
-            println!("Decimals: {}", decimals);
-            println!("URI: {}", uri);
-        }
-        Err(e) => {
-            println!("❌ Configuration is invalid: {:?}", e);
-            return Err(e.into());
-        }
-    }
-
-    Ok(())
-}
-
-fn handle_get_pda(matches: &clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let mint_str = matches.get_one::<String>("mint").unwrap();
-    let program_id_str = matches.get_one::<String>("program-id").unwrap();
-
-    let mint = Pubkey::from_str(mint_str)?;
-    let program_id = Pubkey::from_str(program_id_str)?;
-
-    let (pda, bump) = get_launched_asset_pda(&program_id, &mint);
-
-    println!("Mint: {}", mint);
-    println!("Program ID: {}", program_id);
-    println!("PDA: {}", pda);
-    println!("Bump: {}", bump);
-
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use token_launch::AssetType;
 
     #[test]
     fn test_asset_type_parsing() {
