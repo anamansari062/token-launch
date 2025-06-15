@@ -1704,7 +1704,6 @@ dependencies = [
  "borsh 0.9.3",
  "getrandom 0.1.16",
  "solana-program",
- "spl-token",
  "thiserror",
  "tokio",
 ]

@@ -2,22 +2,22 @@ pub mod state;
 pub mod processor;
 pub mod constants;
 pub mod entrypoint;
+pub mod util;
+pub mod cpi;
 
 pub use solana_program;
 pub use state::*;
-pub use processor::launch_asset::{ get_launched_asset_pda, validate_launch_config };
 
-solana_program::declare_id!("GwTjStvL55tnFJe9XdVy95xEn7L6XZBMP2r5NVPDfhPe");
+solana_program::declare_id!("4n6ByGTtLj4fTgLApV2aigC3XzWZhCmYkNbcfVheGzd8");
 
 #[cfg(test)]
 mod tests {
     use solana_program::pubkey::Pubkey;
 
+    use crate::{constants::LAUNCHED_ASSET_SEED, util::{get_launched_asset_pda, validate_launch_config}};
+
     use super::*;
-    use crate::{
-        constants::LAUNCHED_ASSET_SEED,
-        processor::launch_asset::{ get_launched_asset_pda, validate_launch_config },
-    };
+
 
     #[test]
     fn test_validate_launch_config_success() {

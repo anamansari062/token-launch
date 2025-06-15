@@ -10,11 +10,9 @@ pub enum LaunchpadInstruction {
     /// 1. [writable] Mint account to be created
     /// 2. [writable] Token account for initial supply (if applicable)
     /// 3. [writable] Metadata account (if applicable)
-    /// 4. [] Rent sysvar
-    /// 5. [] System program
-    /// 6. [] Token program (legacy or 2022)
-    /// 7. [] Associated token program (if applicable)
-    /// 8. [] Metadata program (if applicable)
+    /// 4. [] System program
+    /// 5. [] Token program (legacy or 2022)
+    /// 6. [] Associated token program (if applicable)
     LaunchAsset {
         config: LaunchConfig,
     },

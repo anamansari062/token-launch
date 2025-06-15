@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 // Import from our library
 use token_launch::{AssetType, LaunchConfig};
+use token_launch::util::{validate_launch_config, get_launched_asset_pda};
 
 fn main() {
     let matches = Command::new("Token Launch CLI")
@@ -104,7 +105,7 @@ fn handle_validate(matches: &clap::ArgMatches) -> Result<(), Box<dyn std::error:
         is_mutable: true,
     };
 
-    match token_launch::validate_launch_config(&config) {
+    match validate_launch_config(&config) {
         Ok(()) => {
             println!("✅ Configuration is valid!");
             println!("Name: {}", name);
@@ -128,7 +129,7 @@ fn handle_get_pda(matches: &clap::ArgMatches) -> Result<(), Box<dyn std::error::
     let mint = Pubkey::from_str(mint_str)?;
     let program_id = Pubkey::from_str(program_id_str)?;
 
-    let (pda, bump) = token_launch::get_launched_asset_pda(&program_id, &mint);
+    let (pda, bump) = get_launched_asset_pda(&program_id, &mint);
 
     println!("Mint: {}", mint);
     println!("Program ID: {}", program_id);

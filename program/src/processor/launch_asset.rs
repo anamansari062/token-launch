@@ -1,16 +1,9 @@
 use solana_program::{
-    account_info::{ next_account_info, AccountInfo }, entrypoint::ProgramResult, msg, program::{invoke, invoke_signed}, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
-};
-use spl_token::{
-    instruction as token_instruction,
-    state::{Account as TokenAccount, Mint},
+    account_info::{ next_account_info, AccountInfo }, entrypoint::ProgramResult,  msg, program::invoke_signed, program_error::ProgramError, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar
 };
 use crate::{
-    constants::LAUNCHED_ASSET_SEED,
-    state::{ Asset, AssetType, LaunchConfig },
+    constants::LAUNCHED_ASSET_SEED, cpi::{initialize_mint, initialize_token_account, mint_to}, state::{ Asset, AssetType, LaunchConfig }, util::validate_launch_config
 };
-
-use crate::constants::*;
 
 use borsh::BorshSerialize;
 
@@ -26,56 +19,53 @@ pub fn launch_asset(
     let payer = next_account_info(accounts_iter)?;
     let mint_account = next_account_info(accounts_iter)?;
     let token_account = next_account_info(accounts_iter)?;
-    let _metadata_account = next_account_info(accounts_iter)?;
-    let rent_sysvar = next_account_info(accounts_iter)?;
+    let metadata_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?;
+    let _associated_token_account = next_account_info(accounts_iter)?;
+    let rent= &Rent::get()?;
 
     // Verify signer
     if !payer.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let rent = Rent::from_account_info(rent_sysvar)?;
-
     match config.asset_type {
         AssetType::SplTokenLegacy => {
             launch_spl_token_legacy(
-                // program_id,
                 payer,
                 mint_account,
                 token_account,
-                // metadata_account,
-                &rent,
                 system_program,
                 token_program,
+                rent,
                 &config,
             )?;
         }
         AssetType::SplToken2022 => {
-            launch_spl_token_2022(
-                // program_id,
-                payer,
-                mint_account,
-                token_account,
-                // metadata_account,
-                &rent,
-                system_program,
-                token_program,
-                &config,
-            )?;
+            // launch_spl_token_2022(
+            //     // program_id,
+            //     payer,
+            //     mint_account,
+            //     token_account,
+            //     // metadata_account,
+            //     &rent,
+            //     system_program,
+            //     token_program,
+            //     &config,
+            // )?;
         }
         AssetType::StandardNft => {
-            launch_standard_nft(
-                // program_id,
-                payer,
-                mint_account,
-                // metadata_account,
-                &rent,
-                system_program,
-                token_program,
-                &config,
-            )?;
+            // launch_standard_nft(
+            //     // program_id,
+            //     payer,
+            //     mint_account,
+            //     // metadata_account,
+            //     &rent,
+            //     system_program,
+            //     token_program,
+            //     &config,
+            // )?;
         }
     }
 
@@ -84,6 +74,7 @@ pub fn launch_asset(
         program_id,
         payer,
         mint_account.key,
+        metadata_account,
         system_program,
         &rent,
         &config
@@ -94,87 +85,26 @@ pub fn launch_asset(
     Ok(())
 }
 
-fn create_launched_asset_account(
-    program_id: &Pubkey,
-    payer: &AccountInfo,
-    mint: &Pubkey,
-    _system_program: &AccountInfo,
-    rent: &Rent,
-    config: &LaunchConfig
-) -> ProgramResult {
-    let (launched_asset_pda, bump_seed) = Pubkey::find_program_address(
-        &[LAUNCHED_ASSET_SEED, mint.as_ref()],
-        program_id
-    );
-
-    let launched_asset = Asset {
-        asset_type: config.asset_type.clone(),
-        mint: *mint,
-        creator: config.creator,
-        name: config.name.clone(),
-        symbol: config.symbol.clone(),
-        total_supply: config.total_supply,
-        launch_timestamp: 0, // Would use Clock sysvar in real implementation
-    };
-
-    let serialized_data = launched_asset.try_to_vec()?;
-    let data_len = serialized_data.len();
-    let lamports = rent.minimum_balance(data_len);
-
-    // Create the PDA account
-    invoke_signed(
-        &system_instruction::create_account(
-            payer.key,
-            &launched_asset_pda,
-            lamports,
-            data_len as u64,
-            program_id
-        ),
-        &[payer.clone()],
-        &[&[LAUNCHED_ASSET_SEED, mint.as_ref(), &[bump_seed]]]
-    )?;
-
-    Ok(())
-}
-
 /// Launch SPL Token (Legacy)
 fn launch_spl_token_legacy<'a>(
     payer: &AccountInfo<'a>,
     mint_account: &AccountInfo<'a>,
     token_account: &AccountInfo<'a>,
-    rent: &Rent,
     system_program: &AccountInfo<'a>,
     token_program: &AccountInfo<'a>,
+    rent: &Rent,
     config: &LaunchConfig,
 )  -> ProgramResult {
     msg!("Launching SPL Token (Legacy): {}", config.name);
 
-    // Create mint account
-    // let mint_space = Mint::LEN;
-    let mint_space = 32; // Add space for the mint authority
-    let mint_lamports = rent.minimum_balance(mint_space);
-
-    invoke(
-        &system_instruction::create_account(
-            payer.key,
-            mint_account.key,
-            mint_lamports,
-            mint_space as u64,
-            token_program.key,
-        ),
-        &[payer.clone(), mint_account.clone(), system_program.clone()],
-    )?;
-
-    // Initialize mint
-    invoke(
-        &token_instruction::initialize_mint(
-            token_program.key,
-            mint_account.key,
-            payer.key,
-            Some(payer.key),
-            config.decimals,
-        )?,
-        &[mint_account.clone()],
+    // Create and initialize mint account
+    initialize_mint::process(
+        payer,
+        payer,
+        mint_account,
+        system_program,
+        token_program,
+        rent
     )?;
 
     // Create and mint to token account if supply > 0
@@ -194,67 +124,68 @@ fn launch_spl_token_legacy<'a>(
 }
 
 /// Launch SPL Token 2022
-fn launch_spl_token_2022<'a>(
-    payer: &AccountInfo<'a>,
-    mint_account: &AccountInfo<'a>,
-    token_account: &AccountInfo<'a>,
-    rent: &Rent,
-    system_program: &AccountInfo<'a>,
-    token_program: &AccountInfo<'a>,
+fn _launch_spl_token_2022<'a>(
+    _payer: &AccountInfo<'a>,
+    _mint_account: &AccountInfo<'a>,
+    _token_account: &AccountInfo<'a>,
+    _rent: &Rent,
+    _system_program: &AccountInfo<'a>,
+    _token_program: &AccountInfo<'a>,
     config: &LaunchConfig,
 ) -> ProgramResult {
     msg!("Launching SPL Token 2022: {}", config.name);
     
     // For now, use same logic as legacy token
     // In a full implementation, you'd use spl-token-2022 specific features
-    launch_spl_token_legacy(
-        payer,
-        mint_account,
-        token_account,
-        rent,
-        system_program,
-        token_program,
-        config,
-    )
+    // launch_spl_token_legacy(
+    //     payer,
+    //     mint_account,
+    //     token_account,
+    //     rent,
+    //     system_program,
+    //     token_program,
+    //     config,
+    // )
+    Ok(())
 }
 
 /// Launch Standard NFT
-fn launch_standard_nft<'a>(
-    payer: &AccountInfo<'a>,
-    mint_account: &AccountInfo<'a>,
-    rent: &Rent,
-    system_program: &AccountInfo<'a>,
-    token_program: &AccountInfo<'a>,
+fn _launch_standard_nft<'a>(
+    _payer: &AccountInfo<'a>,
+    _mint_account: &AccountInfo<'a>,
+    _rent: &Rent,
+    _system_program: &AccountInfo<'a>,
+    _token_program: &AccountInfo<'a>,
     config: &LaunchConfig,
 ) -> ProgramResult {
     msg!("Launching Standard NFT: {}", config.name);
 
     // Create mint account for NFT (0 decimals, supply of 1)
-    let mint_space = Mint::LEN;
-    let mint_lamports = rent.minimum_balance(mint_space);
+    // let mint_space = Mint::LEN;
+    // let mint_lamports = rent.minimum_balance(mint_space);
 
-    invoke(
-        &system_instruction::create_account(
-            payer.key,
-            mint_account.key,
-            mint_lamports,
-            mint_space as u64,
-            token_program.key,
-        ),
-        &[payer.clone(), mint_account.clone(), system_program.clone()],
-    )?;
+    // invoke(
+    //     &system_instruction::create_account(
+    //         payer.key,
+    //         mint_account.key,
+    //         mint_lamports,
+    //         mint_space as u64,
+    //         token_program.key,
+    //     ),
+    //     &[payer.clone(), mint_account.clone(), system_program.clone()],
+    // )?;
 
     // Initialize mint with 0 decimals for NFT
-    invoke(
-        &token_instruction::initialize_mint(
-            token_program.key,
-            mint_account.key,
-            payer.key,
-            Some(payer.key),
-            0, // NFTs have 0 decimals
-        )?,
-        &[mint_account.clone()],
-    )?;
+    // invoke(
+    //     &token_instruction::initialize_mint(
+    //         token_program.key,
+    //         mint_account.key,
+    //         payer.key,
+    //         Some(payer.key),
+    //         0, // NFTs have 0 decimals
+    //     )?,
+    //     &[mint_account.clone()],
+    // )?;
 
     // Note: In a full implementation, I would create Metaplex metadata here
     // This requires additional accounts and the Metaplex Token Metadata program
@@ -262,96 +193,93 @@ fn launch_standard_nft<'a>(
     Ok(())
 }
 
+/// Helper function to create metadata account for asset
+fn create_launched_asset_account<'a>(
+    program_id: &Pubkey,
+    payer: &AccountInfo<'a>,
+    mint: &Pubkey,
+    metadata_account: &AccountInfo<'a>,
+    _system_program: &AccountInfo<'a>,
+    rent: &Rent,
+    config: &LaunchConfig,
+) -> ProgramResult {
+    let (launched_asset_pda, bump_seed) = Pubkey::find_program_address(
+        &[LAUNCHED_ASSET_SEED, mint.as_ref()],
+        program_id,
+    );
+
+    // Ensure the PDA is not already initialized
+    if !metadata_account.key.eq(&launched_asset_pda) {
+        return Err(ProgramError::AccountAlreadyInitialized);
+    }
+
+    msg!("Creating launched asset account: {}", launched_asset_pda);
+
+    let launched_asset = Asset {
+        asset_type: config.asset_type.clone(),
+        mint: *mint,
+        creator: config.creator,
+        name: config.name.clone(),
+        symbol: config.symbol.clone(),
+        total_supply: config.total_supply,
+        launch_timestamp: 0, // Use Clock sysvar in full impl
+    };
+
+    let serialized_data = launched_asset.try_to_vec()?;
+    let data_len = serialized_data.len();
+    let lamports = rent.minimum_balance(data_len);
+
+    invoke_signed(
+        &system_instruction::create_account(
+            payer.key,
+            &launched_asset_pda,
+            lamports,
+            data_len as u64,
+            program_id,
+        ),
+        &[
+            payer.clone(),
+            metadata_account.clone(),
+        ],
+        &[&[LAUNCHED_ASSET_SEED, mint.as_ref(), &[bump_seed]]],
+    )?;
+
+    Ok(())
+}
+
 /// Helper function to create token account and mint initial supply
 fn create_and_mint_to_token_account<'a>(
     payer: &AccountInfo<'a>,
-    mint_account: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
     token_account: &AccountInfo<'a>,
     rent: &Rent,
     system_program: &AccountInfo<'a>,
     token_program: &AccountInfo<'a>,
     amount: u64,
 ) -> ProgramResult {
-    // Create token account
-    let account_space = TokenAccount::LEN;
-    let account_lamports = rent.minimum_balance(account_space);
 
-    invoke(
-        &system_instruction::create_account(
-            payer.key,
-            token_account.key,
-            account_lamports,
-            account_space as u64,
-            token_program.key,
-        ),
-        &[payer.clone(), token_account.clone(), system_program.clone()],
+    initialize_token_account::process(
+        payer,
+        token_account,
+        mint,
+        system_program,
+        token_program,
+        rent
     )?;
 
-    // Initialize token account
-    invoke(
-        &token_instruction::initialize_account(
-            token_program.key,
-            token_account.key,
-            mint_account.key,
-            payer.key,
-        )?,
-        &[token_account.clone(), mint_account.clone(), payer.clone()],
+    msg!("Token account initialized: {}", token_account.key);
+
+    mint_to::process(
+        token_program,
+        mint,
+        token_account,
+        payer,
+        amount,
+        &[],
     )?;
 
-    // Mint tokens to the account
-    invoke(
-        &token_instruction::mint_to(
-            token_program.key,
-            mint_account.key,
-            token_account.key,
-            payer.key,
-            &[],
-            amount,
-        )?,
-        &[
-            mint_account.clone(),
-            token_account.clone(),
-            payer.clone(),
-        ],
-    )?;
+    msg!("Minted {}", amount);
 
     Ok(())
 }
 
-/// Validate launch configuration
-pub fn validate_launch_config(config: &LaunchConfig) -> ProgramResult {
-    if config.name.len() > MAX_NAME_LENGTH {
-        msg!("Name too long: {} > {}", config.name.len(), MAX_NAME_LENGTH);
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    if config.symbol.len() > MAX_SYMBOL_LENGTH {
-        msg!(
-            "Symbol too long: {} > {}",
-            config.symbol.len(),
-            MAX_SYMBOL_LENGTH
-        );
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    if config.metadata_uri.len() > MAX_URI_LENGTH {
-        msg!(
-            "URI too long: {} > {}",
-            config.metadata_uri.len(),
-            MAX_URI_LENGTH
-        );
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    if config.decimals > 9 {
-        msg!("Decimals too high: {} > 9", config.decimals);
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    Ok(())
-}
-
-/// Helper function to get launched asset PDA
-pub fn get_launched_asset_pda(program_id: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[LAUNCHED_ASSET_SEED, mint.as_ref()], program_id)
-}
